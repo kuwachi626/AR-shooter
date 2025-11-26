@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<title>AR Shooter Game</title>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<div id="ui-overlay">
+			<div id="start-screen" class="screen">
+				<h1>🎯 AR Shooter</h1>
+				<p>敵を撃って高得点を目指そう!</p>
+				<button id="start-ar-btn" class="btn-large">ARで遊ぶ</button>
+			</div>
+
+			<div id="game-ui" class="screen" style="display: none">
+				<div id="hud">
+					<div class="hud-item">
+						<span class="label">スコア:</span>
+						<span id="score">0</span>
+					</div>
+					<div class="hud-item">
+						<span class="label">HP:</span>
+						<span id="hp">❤️❤️❤️</span>
+					</div>
+					<div class="hud-item">
+						<span class="label">時間:</span>
+						<span id="timer">60</span>
+					</div>
+				</div>
+				<div id="crosshair">+</div>
+			</div>
+
+			<div id="game-over-screen" class="screen" style="display: none">
+				<h1>ゲームオーバー!</h1>
+				<p>最終スコア: <span id="final-score">0</span></p>
+				<button id="restart-btn" class="btn-large">もう一度遊ぶ</button>
+			</div>
+		</div>
+
+		<script type="module" src="game.js"></script>
+	</body>
+</html>
