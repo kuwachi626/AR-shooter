@@ -37,22 +37,24 @@ const gameModes = {
     },
 };
 
-// スコア履歴管理
-function saveScore(score) {
-    let scores = getScoreHistory();
+// スコア履歴管理（モード別）
+function saveScore(score, mode) {
+    const storageKey = `arShooterScores_${mode}`;
+    let scores = getScoreHistory(mode);
     scores.push(score);
     scores.sort((a, b) => b - a); // 降順ソート
     scores = scores.slice(0, 10); // 上位10個まで保存
-    localStorage.setItem("arShooterScores", JSON.stringify(scores));
+    localStorage.setItem(storageKey, JSON.stringify(scores));
 }
 
-function getScoreHistory() {
-    const saved = localStorage.getItem("arShooterScores");
+function getScoreHistory(mode) {
+    const storageKey = `arShooterScores_${mode}`;
+    const saved = localStorage.getItem(storageKey);
     return saved ? JSON.parse(saved) : [];
 }
 
-function getTopScores(count = 3) {
-    const scores = getScoreHistory();
+function getTopScores(mode, count = 3) {
+    const scores = getScoreHistory(mode);
     return scores.slice(0, count);
 }
 
@@ -610,16 +612,26 @@ function update3DGameOverScore(score) {
     ctx.font = "bold 70px Arial";
     ctx.fillText(score.toString(), canvas.width / 2, 290);
 
-    // ランキング表示
-    const topScores = getTopScores(3);
+    // 現在のモードのランキング表示
+    const currentMode = gameState.gameMode || "classic";
+    const topScores = getTopScores(currentMode, 3);
     if (topScores.length > 0) {
+        // モード名を表示
+        ctx.fillStyle = "#ffaa00";
+        ctx.font = "bold 30px Arial";
+        ctx.fillText(
+            `[🎮 ${gameModes[currentMode].name}モード]`,
+            canvas.width / 2,
+            350,
+        );
+
         ctx.fillStyle = "#ffffff";
         ctx.font = "bold 35px Arial";
-        ctx.fillText("🏆 TOP 3 SCORES", canvas.width / 2, 370);
+        ctx.fillText("🏆 TOP 3 SCORES", canvas.width / 2, 395);
 
         const medals = ["🥇", "🥈", "🥉"];
         topScores.forEach((topScore, index) => {
-            const yPos = 430 + index * 60;
+            const yPos = 455 + index * 60;
 
             // ランキング番号とメダル
             ctx.fillStyle = "#ffffff";
@@ -1269,9 +1281,10 @@ function onTriggerPress(event) {
             console.log("リスタートボタンがクリックされました");
             // ゲームオーバー画面を非表示
             gameOver3DGroup.visible = false;
-            // ゲームを再開始
-            gameUI.style.display = "block";
-            startGame();
+            // モード選択画面を表示
+            if (modeSelect3DGroup) {
+                modeSelect3DGroup.visible = true;
+            }
 
             // バイブレーション
             if (navigator.vibrate) {
@@ -1394,8 +1407,10 @@ function onSelect(event) {
         if (buttonIntersects.length > 0) {
             console.log("リスタートボタンがクリックされました（タップ）");
             gameOver3DGroup.visible = false;
-            gameUI.style.display = "block";
-            startGame();
+            // モード選択画面を表示
+            if (modeSelect3DGroup) {
+                modeSelect3DGroup.visible = true;
+            }
             return;
         }
     }
@@ -1493,8 +1508,8 @@ function updateUI() {
 function endGame() {
     gameState.isPlaying = false;
 
-    // スコアを保存
-    saveScore(gameState.score);
+    // 現在のモードでスコアを保存
+    saveScore(gameState.score, gameState.gameMode);
 
     // 全ての敵を削除
     gameState.enemies.forEach((enemy) => scene.remove(enemy));
@@ -1817,9 +1832,10 @@ restartBtn.addEventListener("click", () => {
     console.log("もう一度遊ぶボタンがクリックされました");
     gameOverScreen.style.display = "none";
 
-    // 3Dタイトル画面を再表示
-    const titleScreen3D = create3DTitleScreen();
-    scene.add(titleScreen3D);
+    // モード選択画面を表示
+    if (modeSelect3DGroup) {
+        modeSelect3DGroup.visible = true;
+    }
 });
 
 // 初期化と開始
