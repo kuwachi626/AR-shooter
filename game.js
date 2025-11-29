@@ -267,33 +267,34 @@ function update3DHUD() {
     const up = new THREE.Vector3(0, 1, 0);
     up.applyQuaternion(camera.quaternion);
 
-    const hudDistance = 0.6; // カメラから0.6m先
+    const hudDistance = 0.7; // カメラから0.7m先（少し遠くして見やすく）
 
-    // スコア：左上
-    const scorePos = cameraPos.clone()
+    // タイマー：左上（端から少し内側）
+    const timerPos = cameraPos.clone()
         .add(cameraDir.clone().multiplyScalar(hudDistance))
-        .add(right.clone().multiplyScalar(-0.25))
-        .add(up.clone().multiplyScalar(0.2));
-    scoreUI3D.position.copy(scorePos);
-    scoreUI3D.quaternion.copy(camera.quaternion);
-    scoreUI3D.visible = gameState.isPlaying;
+        .add(right.clone().multiplyScalar(-0.18)) // 左上に配置
+        .add(up.clone().multiplyScalar(0.15));
+    timerUI3D.position.copy(timerPos);
+    timerUI3D.quaternion.copy(camera.quaternion);
+    timerUI3D.visible = gameState.isPlaying;
 
-    // HP：左下
+    // HP：左下（端から少し内側）
     const hpPos = cameraPos.clone()
         .add(cameraDir.clone().multiplyScalar(hudDistance))
-        .add(right.clone().multiplyScalar(-0.25))
-        .add(up.clone().multiplyScalar(-0.2));
+        .add(right.clone().multiplyScalar(-0.18)) // -0.25から-0.18に（内側へ）
+        .add(up.clone().multiplyScalar(-0.15)); // -0.2から-0.15に（少し上げる）
     hpUI3D.position.copy(hpPos);
     hpUI3D.quaternion.copy(camera.quaternion);
     hpUI3D.visible = gameState.isPlaying;
 
-    // タイマー：上中央
-    const timerPos = cameraPos.clone()
+    // スコア：上中央（少し下げる）
+    const scorePos = cameraPos.clone()
         .add(cameraDir.clone().multiplyScalar(hudDistance))
-        .add(up.clone().multiplyScalar(0.25));
-    timerUI3D.position.copy(timerPos);
-    timerUI3D.quaternion.copy(camera.quaternion);
-    timerUI3D.visible = gameState.isPlaying;
+        .add(right.clone().multiplyScalar(0.10))
+        .add(up.clone().multiplyScalar(0.15)); // 上中央に配置
+    scoreUI3D.position.copy(scorePos);
+    scoreUI3D.quaternion.copy(camera.quaternion);
+    scoreUI3D.visible = gameState.isPlaying;
 }
 
 // 3D HUDのテキストを更新
@@ -305,23 +306,18 @@ function update3DUIText() {
     const scoreCanvas = scoreUI3D.userData.canvas;
     scoreCtx.clearRect(0, 0, scoreCanvas.width, scoreCanvas.height);
 
-    // 半透明背景
-    scoreCtx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    scoreCtx.roundRect(
-        10,
-        10,
-        scoreCanvas.width - 20,
-        scoreCanvas.height - 20,
-        10,
-    );
-    scoreCtx.fill();
-
-    // テキスト
-    scoreCtx.fillStyle = "#ffffff";
+    // テキスト（背景なし）
+    // 白い縁取りを追加して視認性を向上
+    scoreCtx.strokeStyle = "#000000";
+    scoreCtx.lineWidth = 4;
     scoreCtx.font = "bold 24px Arial";
+    scoreCtx.strokeText("SCORE", 25, 45);
+    scoreCtx.fillStyle = "#ffffff";
     scoreCtx.fillText("SCORE", 25, 45);
-    scoreCtx.fillStyle = "#ffff00";
+
     scoreCtx.font = "bold 40px Arial";
+    scoreCtx.strokeText(gameState.score.toString(), 25, 90);
+    scoreCtx.fillStyle = "#ffff00";
     scoreCtx.fillText(gameState.score.toString(), 25, 90);
     scoreUI3D.userData.texture.needsUpdate = true;
 
@@ -330,19 +326,21 @@ function update3DUIText() {
     const hpCanvas = hpUI3D.userData.canvas;
     hpCtx.clearRect(0, 0, hpCanvas.width, hpCanvas.height);
 
-    // 半透明背景
-    hpCtx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    hpCtx.roundRect(10, 10, hpCanvas.width - 20, hpCanvas.height - 20, 10);
-    hpCtx.fill();
-
-    // テキスト
-    hpCtx.fillStyle = "#ffffff";
+    // テキスト（背景なし）
+    // 白い縁取りを追加して視認性を向上
+    hpCtx.strokeStyle = "#000000";
+    hpCtx.lineWidth = 4;
     hpCtx.font = "bold 24px Arial";
+    hpCtx.strokeText("HP", 25, 45);
+    hpCtx.fillStyle = "#ffffff";
     hpCtx.fillText("HP", 25, 45);
-    hpCtx.fillStyle = "#ff0000";
+
     hpCtx.font = "bold 40px Arial";
     const hearts = "❤️".repeat(gameState.hp);
-    hpCtx.fillText(hearts || "💀", 25, 90);
+    const text = hearts || "💀";
+    hpCtx.strokeText(text, 25, 90);
+    hpCtx.fillStyle = "#ff0000";
+    hpCtx.fillText(text, 25, 90);
     hpUI3D.userData.texture.needsUpdate = true;
 
     // タイマー更新
@@ -350,32 +348,33 @@ function update3DUIText() {
     const timerCanvas = timerUI3D.userData.canvas;
     timerCtx.clearRect(0, 0, timerCanvas.width, timerCanvas.height);
 
-    // 半透明背景
-    timerCtx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    timerCtx.roundRect(
-        10,
-        10,
-        timerCanvas.width - 20,
-        timerCanvas.height - 20,
-        10,
-    );
-    timerCtx.fill();
-
-    // テキスト
-    timerCtx.fillStyle = "#ffffff";
-    timerCtx.font = "bold 24px Arial";
+    // テキスト（背景なし）
+    // 白い縁取りを追加して視認性を向上
     timerCtx.textAlign = "center";
+    timerCtx.strokeStyle = "#000000";
+    timerCtx.lineWidth = 4;
+    timerCtx.font = "bold 24px Arial";
+    timerCtx.strokeText("TIME", timerCanvas.width / 2, 45);
+    timerCtx.fillStyle = "#ffffff";
     timerCtx.fillText("TIME", timerCanvas.width / 2, 45);
 
     // 残り時間によって色を変える
+    let timeColor;
     if (gameState.timeLeft <= 10) {
-        timerCtx.fillStyle = "#ff0000";
+        timeColor = "#ff0000";
     } else if (gameState.timeLeft <= 30) {
-        timerCtx.fillStyle = "#ffaa00";
+        timeColor = "#ffaa00";
     } else {
-        timerCtx.fillStyle = "#00ff00";
+        timeColor = "#00ff00";
     }
+
     timerCtx.font = "bold 40px Arial";
+    timerCtx.strokeText(
+        gameState.timeLeft.toString(),
+        timerCanvas.width / 2,
+        90,
+    );
+    timerCtx.fillStyle = timeColor;
     timerCtx.fillText(gameState.timeLeft.toString(), timerCanvas.width / 2, 90);
     timerUI3D.userData.texture.needsUpdate = true;
 }
