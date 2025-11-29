@@ -9,6 +9,32 @@ const gameState = {
     isPlaying: false,
     enemies: [],
     bullets: [],
+    gameMode: "classic", // 'classic', 'survival', 'timeattack'
+};
+
+// ゲームモード設定
+const gameModes = {
+    classic: {
+        name: "クラシック",
+        description: "60秒間でハイスコアを目指せ！",
+        time: 60,
+        hp: 3,
+        spawnInterval: 2000,
+    },
+    survival: {
+        name: "サバイバル",
+        description: "HP制限！何体倒せるか挑戦",
+        time: 999,
+        hp: 5,
+        spawnInterval: 1500,
+    },
+    timeattack: {
+        name: "タイムアタック",
+        description: "30秒の高速バトル！",
+        time: 30,
+        hp: 3,
+        spawnInterval: 1000,
+    },
 };
 
 // スコア履歴管理
@@ -61,6 +87,8 @@ let warningIndicators = [];
 let scoreUI3D, hpUI3D, timerUI3D;
 // 3Dゲームオーバー画面
 let gameOver3DGroup, restartButton3D;
+// 3Dモード選択画面
+let modeSelect3DGroup, modeButtons;
 // 銃声SE
 let shotSound;
 // ダメージSE
@@ -176,6 +204,9 @@ function init() {
 
     // 3D HUDを作成
     create3DHUD();
+
+    // 3Dモード選択画面を作成
+    create3DModeSelectScreen();
 
     // 3Dゲームオーバー画面を作成
     create3DGameOverScreen();
@@ -395,6 +426,115 @@ function update3DUIText() {
     timerCtx.fillStyle = timeColor;
     timerCtx.fillText(gameState.timeLeft.toString(), timerCanvas.width / 2, 90);
     timerUI3D.userData.texture.needsUpdate = true;
+}
+
+// AR空間に3Dモード選択画面を作成
+function create3DModeSelectScreen() {
+    modeSelect3DGroup = new THREE.Group();
+    modeButtons = [];
+
+    // モード選択画面用のキャンバス
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 900;
+    const ctx = canvas.getContext("2d");
+
+    // 背景（半透明パネル）
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // タイトル
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 60px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("ゲームモード選択", canvas.width / 2, 80);
+
+    // 各モードのボタンを描画
+    const modes = ["classic", "survival", "timeattack"];
+    const colors = ["#4CAF50", "#FF9800", "#F44336"];
+    let yPos = 150;
+
+    modes.forEach((modeKey, index) => {
+        const mode = gameModes[modeKey];
+
+        // ボタン背景
+        ctx.fillStyle = colors[index];
+        ctx.fillRect(112, yPos, 800, 180);
+
+        // ボタン枠
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(112, yPos, 800, 180);
+
+        // モード名
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 50px Arial";
+        ctx.fillText(mode.name, canvas.width / 2, yPos + 70);
+
+        // 説明
+        ctx.font = "30px Arial";
+        ctx.fillText(mode.description, canvas.width / 2, yPos + 120);
+
+        // モード詳細
+        ctx.font = "25px Arial";
+        const details = `時間: ${mode.time}秒 | HP: ${mode.hp} | 難易度: ${
+            index === 0 ? "普通" : index === 1 ? "高" : "超高"
+        }`;
+        ctx.fillText(details, canvas.width / 2, yPos + 155);
+
+        yPos += 230;
+    });
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide,
+    });
+    const geometry = new THREE.PlaneGeometry(2.5, 2.2);
+    const modeSelectMesh = new THREE.Mesh(geometry, material);
+    modeSelectMesh.userData.canvas = canvas;
+    modeSelectMesh.userData.context = ctx;
+    modeSelectMesh.userData.texture = texture;
+
+    modeSelect3DGroup.add(modeSelectMesh);
+
+    // 各モードボタン用の当たり判定
+    modes.forEach((modeKey, index) => {
+        const buttonGeometry = new THREE.PlaneGeometry(2.0, 0.44);
+        const buttonMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,
+            transparent: true,
+            opacity: 0.01,
+        });
+        const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+        button.position.set(0, 0.55 - index * 0.56, 0.01);
+        button.userData.isModeButton = true;
+        button.userData.mode = modeKey;
+        modeSelect3DGroup.add(button);
+        modeButtons.push(button);
+    });
+
+    // 初期状態は非表示
+    modeSelect3DGroup.visible = false;
+
+    scene.add(modeSelect3DGroup);
+}
+
+// 3Dモード選択画面の位置を更新
+function update3DModeSelectScreen() {
+    if (!modeSelect3DGroup || !modeSelect3DGroup.visible) return;
+
+    const cameraPos = camera.position.clone();
+    const cameraDir = new THREE.Vector3(0, 0, -1);
+    cameraDir.applyQuaternion(camera.quaternion);
+
+    // カメラの前方2mに配置
+    const screenPos = cameraPos.clone().add(cameraDir.multiplyScalar(2));
+    modeSelect3DGroup.position.copy(screenPos);
+
+    // カメラの方を向く
+    modeSelect3DGroup.quaternion.copy(camera.quaternion);
 }
 
 // AR空間に3Dゲームオーバー画面を作成
@@ -980,9 +1120,11 @@ async function startAR() {
 
 // ゲーム開始
 function startGame() {
+    // 選択されたモードの設定を適用
+    const mode = gameModes[gameState.gameMode];
     gameState.score = 0;
-    gameState.hp = 3;
-    gameState.timeLeft = 60;
+    gameState.hp = mode.hp;
+    gameState.timeLeft = mode.time;
     gameState.isPlaying = true;
     gameState.enemies = [];
 
@@ -1010,6 +1152,7 @@ function startGame() {
 
 // 敵を生成
 function spawnEnemies() {
+    const mode = gameModes[gameState.gameMode];
     const spawnInterval = setInterval(() => {
         if (!gameState.isPlaying) {
             clearInterval(spawnInterval);
@@ -1017,7 +1160,7 @@ function spawnEnemies() {
         }
 
         createEnemy();
-    }, 2000); // 2秒ごとに敵生成
+    }, mode.spawnInterval); // モードに応じた間隔で敵生成
 }
 
 // 敵を作成
@@ -1094,11 +1237,16 @@ function onTriggerPress(event) {
             scene.remove(arTitleGroup);
             arTitleGroup = null;
             startButton3D = null;
-            gameUI.style.display = "block";
-            startGame();
+            // モード選択画面を表示
+            if (modeSelect3DGroup) {
+                modeSelect3DGroup.visible = true;
+            }
             return;
         }
     }
+
+    // モード選択は弾丸でのみ選択可能（トリガーでの直接選択は無効）
+    // モード選択画面では弾を打って選択
 
     // リスタートボタンのチェック
     if (
@@ -1223,11 +1371,16 @@ function onSelect(event) {
             scene.remove(arTitleGroup);
             arTitleGroup = null;
             startButton3D = null;
-            gameUI.style.display = "block";
-            startGame();
+            // モード選択画面を表示
+            if (modeSelect3DGroup) {
+                modeSelect3DGroup.visible = true;
+            }
             return;
         }
     }
+
+    // モード選択は弾丸でのみ選択可能（タップでの直接選択は無効）
+    // モード選択画面では弾を打って選択
 
     // リスタートボタンのチェック
     if (
@@ -1396,6 +1549,9 @@ function render(timestamp, frame) {
     // 3D HUDの更新
     update3DHUD();
 
+    // 3Dモード選択画面の更新
+    update3DModeSelectScreen();
+
     // 3Dゲームオーバー画面の更新
     update3DGameOverScreen(); // ARヒットテストの処理
     if (frame && hitTestSource) {
@@ -1461,12 +1617,13 @@ function render(timestamp, frame) {
                     b !== bullet
                 );
 
-                // ゲーム開始
+                // モード選択画面を表示
                 scene.remove(arTitleGroup);
                 arTitleGroup = null;
                 startButton3D = null;
-                gameUI.style.display = "block";
-                startGame();
+                if (modeSelect3DGroup) {
+                    modeSelect3DGroup.visible = true;
+                }
 
                 // バイブレーション
                 if (navigator.vibrate) {
@@ -1474,6 +1631,51 @@ function render(timestamp, frame) {
                 }
                 return;
             }
+        }
+
+        // モード選択ボタンとの衝突判定
+        if (
+            modeButtons && modeButtons.length > 0 && modeSelect3DGroup &&
+            modeSelect3DGroup.visible
+        ) {
+            modeButtons.forEach((button) => {
+                const buttonWorldPos = new THREE.Vector3();
+                button.getWorldPosition(buttonWorldPos);
+                const distanceToButton = bullet.position.distanceTo(
+                    buttonWorldPos,
+                );
+
+                if (distanceToButton < 0.5) {
+                    console.log("弾丸がモードボタンに命中！");
+                    const selectedMode = button.userData.mode;
+                    console.log(
+                        `モード「${
+                            gameModes[selectedMode].name
+                        }」が選択されました`,
+                    );
+
+                    // 弾丸を削除
+                    if (bullet.userData.body) {
+                        world.removeRigidBody(bullet.userData.body);
+                    }
+                    scene.remove(bullet);
+                    gameState.bullets = gameState.bullets.filter((b) =>
+                        b !== bullet
+                    );
+
+                    // モードを設定してゲーム開始
+                    gameState.gameMode = selectedMode;
+                    modeSelect3DGroup.visible = false;
+                    gameUI.style.display = "block";
+                    startGame();
+
+                    // バイブレーション
+                    if (navigator.vibrate) {
+                        navigator.vibrate(100);
+                    }
+                    return;
+                }
+            });
         }
     });
 
