@@ -1177,19 +1177,93 @@ function spawnEnemies() {
 
 // 敵を作成
 function createEnemy() {
-    const colors = [0x00ff00, 0xff0000, 0xffff00, 0x00ffff];
-    const color = colors[Math.floor(Math.random() * colors.length)];
+    // 敵のタイプを定義（形状、色、速度、サイズ、スコア）
+    const enemyTypes = [
+        {
+            name: "通常",
+            geometry: new THREE.SphereGeometry(0.1, 32, 32),
+            color: 0x00ff00,
+            speed: 0.008,
+            size: 1.0,
+            score: 10,
+        },
+        {
+            name: "高速",
+            geometry: new THREE.SphereGeometry(0.08, 16, 16),
+            color: 0xff0000,
+            speed: 0.015,
+            size: 0.8,
+            score: 20,
+        },
+        {
+            name: "大型",
+            geometry: new THREE.SphereGeometry(0.15, 32, 32),
+            color: 0xffff00,
+            speed: 0.005,
+            size: 1.5,
+            score: 15,
+        },
+        {
+            name: "キューブ",
+            geometry: new THREE.BoxGeometry(0.12, 0.12, 0.12),
+            color: 0x00ffff,
+            speed: 0.007,
+            size: 1.0,
+            score: 12,
+        },
+        {
+            name: "ピラミッド",
+            geometry: new THREE.ConeGeometry(0.08, 0.15, 4),
+            color: 0xff00ff,
+            speed: 0.01,
+            size: 1.0,
+            score: 18,
+        },
+        {
+            name: "リング",
+            geometry: new THREE.TorusGeometry(0.08, 0.03, 16, 32),
+            color: 0xff8800,
+            speed: 0.009,
+            size: 1.0,
+            score: 25,
+        },
+        {
+            name: "小型高速",
+            geometry: new THREE.SphereGeometry(0.06, 16, 16),
+            color: 0xff69b4,
+            speed: 0.018,
+            size: 0.6,
+            score: 30,
+        },
+        {
+            name: "極小",
+            geometry: new THREE.SphereGeometry(0.04, 12, 12),
+            color: 0xffffff,
+            speed: 0.012,
+            size: 0.4,
+            score: 40,
+        },
+        {
+            name: "小型キューブ",
+            geometry: new THREE.BoxGeometry(0.07, 0.07, 0.07),
+            color: 0x00ff88,
+            speed: 0.013,
+            size: 0.7,
+            score: 28,
+        },
+    ];
 
-    // よりリアルなサイズ（20cm）
-    const geometry = new THREE.SphereGeometry(0.1, 32, 32);
+    // ランダムに敵タイプを選択
+    const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+
     const material = new THREE.MeshStandardMaterial({
-        color: color,
-        emissive: color,
+        color: enemyType.color,
+        emissive: enemyType.color,
         emissiveIntensity: 0.5,
         metalness: 0.3,
         roughness: 0.4,
     });
-    const enemy = new THREE.Mesh(geometry, material);
+    const enemy = new THREE.Mesh(enemyType.geometry, material);
 
     // カメラ位置を基準に配置
     const cameraPos = camera.position.clone();
@@ -1210,7 +1284,9 @@ function createEnemy() {
     );
 
     enemy.userData.isEnemy = true;
-    enemy.userData.speed = 0.005 + Math.random() * 0.01;
+    enemy.userData.speed = enemyType.speed;
+    enemy.userData.enemyType = enemyType.name;
+    enemy.userData.scoreValue = enemyType.score;
 
     // カメラに向かってゆっくり移動
     const directionToCamera = new THREE.Vector3()
@@ -1722,12 +1798,13 @@ function render(timestamp, frame) {
                     // ヒット！
                     console.log("敵にヒット！");
 
-                    // スコア加算
+                    // スコア加算（敵のタイプに応じたスコア）
+                    const baseScore = enemy.userData.scoreValue || 10;
                     const shootDistance = bullet.userData.birthTime
                         ? bullet.position.distanceTo(cameraPos)
                         : 2;
-                    const bonus = Math.floor(shootDistance * 2);
-                    gameState.score += 10 + bonus;
+                    const distanceBonus = Math.floor(shootDistance * 2);
+                    gameState.score += baseScore + distanceBonus;
                     updateUI();
 
                     // エフェクト
