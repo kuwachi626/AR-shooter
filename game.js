@@ -23,13 +23,13 @@ const gameModes = {
     },
     survival: {
         name: "サバイバル",
-        description: "HP制限！何体倒せるか挑戦",
+        description: "何体倒せるか挑戦",
         time: 999,
-        hp: 5,
+        hp: 1,
         spawnInterval: 1500,
     },
     timeattack: {
-        name: "タイムアタック",
+        name: "究極バトル",
         description: "30秒の高速バトル！",
         time: 30,
         hp: 3,
