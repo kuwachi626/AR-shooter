@@ -11,6 +11,25 @@ const gameState = {
     bullets: [],
 };
 
+// スコア履歴管理
+function saveScore(score) {
+    let scores = getScoreHistory();
+    scores.push(score);
+    scores.sort((a, b) => b - a); // 降順ソート
+    scores = scores.slice(0, 10); // 上位10個まで保存
+    localStorage.setItem("arShooterScores", JSON.stringify(scores));
+}
+
+function getScoreHistory() {
+    const saved = localStorage.getItem("arShooterScores");
+    return saved ? JSON.parse(saved) : [];
+}
+
+function getTopScores(count = 3) {
+    const scores = getScoreHistory();
+    return scores.slice(0, count);
+}
+
 // Three.js要素
 let scene, camera, renderer, reticle;
 let hitTestSource = null;
@@ -40,6 +59,8 @@ let warningCanvas, warningCtx;
 let warningIndicators = [];
 // 3D UI要素（スコア、HP、タイマー）
 let scoreUI3D, hpUI3D, timerUI3D;
+// 3Dゲームオーバー画面
+let gameOver3DGroup, restartButton3D;
 
 // 初期化
 function init() {
@@ -149,6 +170,9 @@ function init() {
 
     // 3D HUDを作成
     create3DHUD();
+
+    // 3Dゲームオーバー画面を作成
+    create3DGameOverScreen();
 
     // ウィンドウリサイズ対応
     window.addEventListener("resize", onWindowResize);
@@ -354,6 +378,144 @@ function update3DUIText() {
     timerCtx.font = "bold 40px Arial";
     timerCtx.fillText(gameState.timeLeft.toString(), timerCanvas.width / 2, 90);
     timerUI3D.userData.texture.needsUpdate = true;
+}
+
+// AR空間に3Dゲームオーバー画面を作成
+function create3DGameOverScreen() {
+    gameOver3DGroup = new THREE.Group();
+
+    // ゲームオーバー画面用のキャンバス
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 900; // 高さを増やしてランキング表示スペースを確保
+    const ctx = canvas.getContext("2d");
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide,
+    });
+    const geometry = new THREE.PlaneGeometry(2.5, 2.2);
+    const gameOverMesh = new THREE.Mesh(geometry, material);
+    gameOverMesh.userData.canvas = canvas;
+    gameOverMesh.userData.context = ctx;
+    gameOverMesh.userData.texture = texture;
+
+    gameOver3DGroup.add(gameOverMesh);
+
+    // リスタートボタン用の当たり判定（透明な平面）
+    const buttonGeometry = new THREE.PlaneGeometry(1.0, 0.3);
+    const buttonMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,
+        transparent: true,
+        opacity: 0.01,
+    });
+    restartButton3D = new THREE.Mesh(buttonGeometry, buttonMaterial);
+    restartButton3D.position.set(0, -0.55, 0.01);
+    restartButton3D.userData.isRestartButton = true;
+
+    gameOver3DGroup.add(restartButton3D);
+
+    // 初期状態は非表示
+    gameOver3DGroup.visible = false;
+
+    scene.add(gameOver3DGroup);
+}
+
+// 3Dゲームオーバー画面を完全に再描画
+function update3DGameOverScore(score) {
+    if (!gameOver3DGroup) return;
+
+    const mesh = gameOver3DGroup.children[0];
+    const ctx = mesh.userData.context;
+    const canvas = mesh.userData.canvas;
+
+    // キャンバス全体をクリア
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 背景（半透明パネル）
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // ゲームオーバーテキスト
+    ctx.fillStyle = "#ff0000";
+    ctx.font = "bold 100px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("GAME OVER", canvas.width / 2, 120);
+
+    // 今回のスコア表示
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "40px Arial";
+    ctx.fillText("Your Score", canvas.width / 2, 210);
+
+    ctx.fillStyle = "#ffff00";
+    ctx.font = "bold 70px Arial";
+    ctx.fillText(score.toString(), canvas.width / 2, 290);
+
+    // ランキング表示
+    const topScores = getTopScores(3);
+    if (topScores.length > 0) {
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 35px Arial";
+        ctx.fillText("🏆 TOP 3 SCORES", canvas.width / 2, 370);
+
+        const medals = ["🥇", "🥈", "🥉"];
+        topScores.forEach((topScore, index) => {
+            const yPos = 430 + index * 60;
+
+            // ランキング番号とメダル
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 40px Arial";
+            ctx.textAlign = "left";
+            ctx.fillText(medals[index], 200, yPos);
+
+            // スコア
+            ctx.textAlign = "right";
+            if (topScore === score && index === 0) {
+                // 新記録の場合は強調
+                ctx.fillStyle = "#ff00ff";
+                ctx.font = "bold 50px Arial";
+            } else {
+                ctx.fillStyle = "#ffdd00";
+                ctx.font = "bold 45px Arial";
+            }
+            ctx.fillText(topScore.toString(), 824, yPos);
+        });
+    }
+
+    // リスタートボタンの背景
+    ctx.fillStyle = "#00ff00";
+    ctx.fillRect(312, 650, 400, 100);
+
+    // ボタンテキスト
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 45px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("もう一度遊ぶ", canvas.width / 2, 715);
+
+    // 操作説明
+    ctx.fillStyle = "#aaaaaa";
+    ctx.font = "25px Arial";
+    ctx.fillText("ボタンを見てトリガーを引いてください", canvas.width / 2, 820);
+
+    mesh.userData.texture.needsUpdate = true;
+}
+
+// 3Dゲームオーバー画面の位置を更新（カメラの前に固定）
+function update3DGameOverScreen() {
+    if (!gameOver3DGroup || !gameOver3DGroup.visible) return;
+
+    const cameraPos = camera.position.clone();
+    const cameraDir = new THREE.Vector3(0, 0, -1);
+    cameraDir.applyQuaternion(camera.quaternion);
+
+    // カメラの前方2mに配置
+    const screenPos = cameraPos.clone().add(cameraDir.multiplyScalar(2));
+    gameOver3DGroup.position.copy(screenPos);
+
+    // カメラの方を向く
+    gameOver3DGroup.quaternion.copy(camera.quaternion);
 }
 
 // AR空間に3D警告インジケーターを作成
@@ -921,6 +1083,39 @@ function onTriggerPress(event) {
         }
     }
 
+    // リスタートボタンのチェック
+    if (
+        restartButton3D && restartButton3D.parent && gameOver3DGroup &&
+        gameOver3DGroup.visible
+    ) {
+        const raycaster = new THREE.Raycaster();
+        const tempMatrix = new THREE.Matrix4();
+        tempMatrix.identity().extractRotation(sourceController.matrixWorld);
+        raycaster.ray.origin.setFromMatrixPosition(
+            sourceController.matrixWorld,
+        );
+        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+        const buttonIntersects = raycaster.intersectObject(
+            restartButton3D,
+            true,
+        );
+        if (buttonIntersects.length > 0) {
+            console.log("リスタートボタンがクリックされました");
+            // ゲームオーバー画面を非表示
+            gameOver3DGroup.visible = false;
+            // ゲームを再開始
+            gameUI.style.display = "block";
+            startGame();
+
+            // バイブレーション
+            if (navigator.vibrate) {
+                navigator.vibrate(100);
+            }
+            return;
+        }
+    }
+
     // タイトル画面またはゲーム中は弾丸を発射
     console.log("弾丸発射を試みます...");
     shootBullet(sourceController);
@@ -1005,6 +1200,24 @@ function onSelect(event) {
             scene.remove(arTitleGroup);
             arTitleGroup = null;
             startButton3D = null;
+            gameUI.style.display = "block";
+            startGame();
+            return;
+        }
+    }
+
+    // リスタートボタンのチェック
+    if (
+        restartButton3D && restartButton3D.parent && gameOver3DGroup &&
+        gameOver3DGroup.visible
+    ) {
+        const buttonIntersects = raycaster.intersectObject(
+            restartButton3D,
+            true,
+        );
+        if (buttonIntersects.length > 0) {
+            console.log("リスタートボタンがクリックされました（タップ）");
+            gameOver3DGroup.visible = false;
             gameUI.style.display = "block";
             startGame();
             return;
@@ -1098,6 +1311,9 @@ function updateUI() {
 function endGame() {
     gameState.isPlaying = false;
 
+    // スコアを保存
+    saveScore(gameState.score);
+
     // 全ての敵を削除
     gameState.enemies.forEach((enemy) => scene.remove(enemy));
     gameState.enemies = [];
@@ -1114,9 +1330,15 @@ function endGame() {
     });
     gameState.bullets = [];
 
-    // ゲームオーバー画面表示
+    // 3Dゲームオーバー画面を表示
+    if (gameOver3DGroup) {
+        gameOver3DGroup.visible = true;
+        update3DGameOverScore(gameState.score);
+    }
+
+    // 2D UIは非表示（AR空間内で完結）
     gameUI.style.display = "none";
-    gameOverScreen.style.display = "flex";
+    // gameOverScreen.style.display = "flex"; // 2D画面は使わない
     finalScoreEl.textContent = gameState.score;
 }
 
@@ -1143,7 +1365,10 @@ function render(timestamp, frame) {
     update3DWarningIndicators();
 
     // 3D HUDの更新
-    update3DHUD(); // ARヒットテストの処理
+    update3DHUD();
+
+    // 3Dゲームオーバー画面の更新
+    update3DGameOverScreen(); // ARヒットテストの処理
     if (frame && hitTestSource) {
         const referenceSpace = renderer.xr.getReferenceSpace();
         const hitTestResults = frame.getHitTestResults(hitTestSource);
