@@ -34,6 +34,11 @@ const hpEl = document.getElementById("hp");
 const timerEl = document.getElementById("timer");
 const finalScoreEl = document.getElementById("final-score");
 
+// 視界外警告システム用のキャンバス
+let warningCanvas, warningCtx;
+// 3D警告インジケーター
+let warningIndicators = [];
+
 // 初期化
 function init() {
     // シーン作成
@@ -137,11 +142,318 @@ function init() {
 
     console.log("コントローラー設定完了");
 
+    // 視界外警告用のキャンバスを作成
+    createWarningCanvas();
+
     // ウィンドウリサイズ対応
     window.addEventListener("resize", onWindowResize);
 
     // 画面タップ/クリック検出
     window.addEventListener("click", onSelect);
+}
+
+// 視界外警告用のキャンバスを作成
+function createWarningCanvas() {
+    warningCanvas = document.createElement("canvas");
+    warningCanvas.width = window.innerWidth;
+    warningCanvas.height = window.innerHeight;
+    warningCanvas.style.position = "fixed";
+    warningCanvas.style.top = "0";
+    warningCanvas.style.left = "0";
+    warningCanvas.style.pointerEvents = "none";
+    warningCanvas.style.zIndex = "1000";
+    document.body.appendChild(warningCanvas);
+    warningCtx = warningCanvas.getContext("2d");
+}
+
+// AR空間に3D警告インジケーターを作成
+function create3DWarningIndicator() {
+    const group = new THREE.Group();
+
+    // 大きな赤い円形エフェクト（外側）
+    const outerGeometry = new THREE.CircleGeometry(0.25, 32);
+    const outerMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0.4,
+        side: THREE.DoubleSide,
+    });
+    const outerCircle = new THREE.Mesh(outerGeometry, outerMaterial);
+    group.add(outerCircle);
+
+    // 中くらいの円（中間）
+    const middleGeometry = new THREE.CircleGeometry(0.18, 32);
+    const middleMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff3333,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide,
+    });
+    const middleCircle = new THREE.Mesh(middleGeometry, middleMaterial);
+    middleCircle.position.z = 0.001;
+    group.add(middleCircle);
+
+    // 小さな円（内側、明るく）
+    const innerGeometry = new THREE.CircleGeometry(0.1, 32);
+    const innerMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff6666,
+        transparent: true,
+        opacity: 0.8,
+        side: THREE.DoubleSide,
+    });
+    const innerCircle = new THREE.Mesh(innerGeometry, innerMaterial);
+    innerCircle.position.z = 0.002;
+    group.add(innerCircle);
+
+    group.visible = false;
+    return group;
+}
+
+// AR空間で視界外の敵の方向を示すインジケーターを更新
+function update3DWarningIndicators() {
+    if (!gameState.isPlaying) {
+        warningIndicators.forEach((indicator) => indicator.visible = false);
+        return;
+    }
+
+    const cameraPos = camera.position;
+    const cameraDir = new THREE.Vector3(0, 0, -1);
+    cameraDir.applyQuaternion(camera.quaternion);
+
+    // 必要な数のインジケーターを確保
+    while (warningIndicators.length < gameState.enemies.length) {
+        const indicator = create3DWarningIndicator();
+        scene.add(indicator);
+        warningIndicators.push(indicator);
+    }
+
+    // すべてのインジケーターを非表示にしてからリセット
+    warningIndicators.forEach((indicator) => indicator.visible = false);
+
+    let indicatorIndex = 0;
+    gameState.enemies.forEach((enemy) => {
+        // 敵の方向ベクトル
+        const enemyDir = new THREE.Vector3()
+            .subVectors(enemy.position, cameraPos)
+            .normalize();
+
+        // カメラの向きとの角度を計算
+        const dot = cameraDir.dot(enemyDir);
+        const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+
+        // 視野角外（約40度以上）の敵にインジケーターを表示
+        if (angle > 0.7) {
+            const indicator = warningIndicators[indicatorIndex];
+            indicator.visible = true;
+
+            // カメラから見える視界内に配置（視界の60%の位置で見やすく）
+            const indicatorDistance = 0.8; // カメラから0.8m先（より近く、見やすい位置）
+            const enemyDistance = enemy.position.distanceTo(cameraPos);
+
+            // 視界の端（視野角の境界）に配置するための方向を計算
+            const right = new THREE.Vector3(1, 0, 0);
+            right.applyQuaternion(camera.quaternion);
+            const up = new THREE.Vector3(0, 1, 0);
+            up.applyQuaternion(camera.quaternion);
+
+            // 敵の方向を分解
+            const horizontalComponent = right.dot(enemyDir);
+            const verticalComponent = up.dot(enemyDir);
+            const forwardComponent = cameraDir.dot(enemyDir);
+
+            // 視界の見やすい位置に制限（視野角の約60%の位置）
+            const maxAngle = 0.35; // 約20度（視界の中で見やすい位置）
+            const horizontalAngle = Math.atan2(
+                horizontalComponent,
+                forwardComponent,
+            );
+            const verticalAngle = Math.atan2(
+                verticalComponent,
+                forwardComponent,
+            );
+
+            const clampedHorizontalAngle = Math.max(
+                -maxAngle,
+                Math.min(maxAngle, horizontalAngle),
+            );
+            const clampedVerticalAngle = Math.max(
+                -maxAngle * 0.7,
+                Math.min(maxAngle * 0.7, verticalAngle),
+            );
+
+            // 制限された角度から新しい方向ベクトルを作成
+            const clampedDir = cameraDir.clone()
+                .add(
+                    right.clone().multiplyScalar(
+                        Math.tan(clampedHorizontalAngle),
+                    ),
+                )
+                .add(up.clone().multiplyScalar(Math.tan(clampedVerticalAngle)))
+                .normalize();
+
+            // インジケーターを視界内の見やすい位置に配置
+            const indicatorPos = cameraPos.clone().add(
+                clampedDir.clone().multiplyScalar(indicatorDistance),
+            );
+            indicator.position.copy(indicatorPos);
+
+            // インジケーターをカメラの方向に向ける（ビルボード効果）
+            indicator.quaternion.copy(camera.quaternion);
+
+            // 距離に応じて色と大きさを変化
+            const intensity = Math.max(0.4, 1 - enemyDistance / 5);
+            const baseScale = 0.8 + intensity * 0.6; // より大きく表示
+
+            // パルス効果（より強く）
+            const pulse = 1 + Math.sin(Date.now() * 0.008) * 0.3;
+            const pulseScale = baseScale * pulse;
+            indicator.scale.set(pulseScale, pulseScale, pulseScale);
+
+            // 外側の円
+            indicator.children[0].material.opacity = 0.3 +
+                intensity * 0.2 * pulse;
+            // 中間の円
+            indicator.children[1].material.opacity = 0.5 +
+                intensity * 0.3 * pulse;
+            // 内側の円
+            indicator.children[2].material.opacity = 0.7 +
+                intensity * 0.3 * pulse;
+
+            // 敵が近い場合は色を濃く、より明るく
+            if (enemyDistance < 2) {
+                indicator.children[0].material.color.setHex(0xff0000);
+                indicator.children[1].material.color.setHex(0xff3333);
+                indicator.children[2].material.color.setHex(0xff6666);
+            } else if (enemyDistance < 3) {
+                indicator.children[0].material.color.setHex(0xff3333);
+                indicator.children[1].material.color.setHex(0xff6666);
+                indicator.children[2].material.color.setHex(0xff9999);
+            } else {
+                indicator.children[0].material.color.setHex(0xff6666);
+                indicator.children[1].material.color.setHex(0xff9999);
+                indicator.children[2].material.color.setHex(0xffcccc);
+            }
+
+            indicatorIndex++;
+        }
+    });
+}
+
+// 視界外の敵に対する警告を描画
+function drawOffScreenWarnings() {
+    if (!warningCtx || !gameState.isPlaying) return;
+
+    // キャンバスをクリア
+    warningCtx.clearRect(0, 0, warningCanvas.width, warningCanvas.height);
+
+    const cameraPos = camera.position;
+    const cameraDir = new THREE.Vector3(0, 0, -1);
+    cameraDir.applyQuaternion(camera.quaternion);
+
+    gameState.enemies.forEach((enemy) => {
+        // 敵の方向ベクトル
+        const enemyDir = new THREE.Vector3()
+            .subVectors(enemy.position, cameraPos)
+            .normalize();
+
+        // カメラの向きとの角度を計算
+        const dot = cameraDir.dot(enemyDir);
+        const angle = Math.acos(dot);
+
+        // 視野角（約60度 = 1.047ラジアン）外の敵に警告を表示
+        if (angle > 0.7) { // 約40度以上
+            // 敵が画面のどの方向にいるかを計算
+            const right = new THREE.Vector3(1, 0, 0);
+            right.applyQuaternion(camera.quaternion);
+            const horizontalDot = right.dot(enemyDir);
+
+            const up = new THREE.Vector3(0, 1, 0);
+            up.applyQuaternion(camera.quaternion);
+            const verticalDot = up.dot(enemyDir);
+
+            // 画面端の位置を計算
+            const centerX = warningCanvas.width / 2;
+            const centerY = warningCanvas.height / 2;
+            const margin = 50; // 画面端からのマージン
+
+            // 角度から画面端の位置を決定
+            let x, y;
+            const absHorizontal = Math.abs(horizontalDot);
+            const absVertical = Math.abs(verticalDot);
+
+            // 左右の判定が強い場合
+            if (absHorizontal > absVertical) {
+                x = horizontalDot > 0 ? warningCanvas.width - margin : margin;
+                y = centerY - verticalDot * 200;
+            } else {
+                // 上下の判定が強い場合
+                x = centerX + horizontalDot * 200;
+                y = verticalDot > 0 ? margin : warningCanvas.height - margin;
+            }
+
+            // 距離に応じて警告の強さを変える
+            const distance = enemy.position.distanceTo(cameraPos);
+            const intensity = Math.max(0.3, 1 - distance / 5);
+
+            // 赤い三角形の警告マーカーを描画
+            const size = 20 + (1 - intensity) * 10;
+            const pulseScale = 1 + Math.sin(Date.now() * 0.005) * 0.2;
+
+            warningCtx.save();
+            warningCtx.translate(x, y);
+
+            // 敵の方向を指す矢印
+            const arrowAngle = Math.atan2(
+                enemy.position.z - cameraPos.z,
+                enemy.position.x - cameraPos.x,
+            ) - Math.atan2(
+                Math.sin(camera.rotation.y),
+                Math.cos(camera.rotation.y),
+            );
+
+            warningCtx.rotate(Math.atan2(centerY - y, centerX - x));
+
+            // グラデーションで警告を描画
+            const gradient = warningCtx.createRadialGradient(
+                0,
+                0,
+                0,
+                0,
+                0,
+                size * pulseScale,
+            );
+            gradient.addColorStop(0, `rgba(255, 0, 0, ${intensity})`);
+            gradient.addColorStop(0.5, `rgba(255, 100, 0, ${intensity * 0.7})`);
+            gradient.addColorStop(1, "rgba(255, 0, 0, 0)");
+
+            warningCtx.fillStyle = gradient;
+            warningCtx.beginPath();
+            warningCtx.arc(0, 0, size * pulseScale, 0, Math.PI * 2);
+            warningCtx.fill();
+
+            // 矢印を描画
+            warningCtx.fillStyle = `rgba(255, 50, 50, ${intensity})`;
+            warningCtx.strokeStyle = `rgba(255, 255, 255, ${intensity})`;
+            warningCtx.lineWidth = 2;
+            warningCtx.beginPath();
+            warningCtx.moveTo(size * 0.6, 0);
+            warningCtx.lineTo(-size * 0.3, -size * 0.4);
+            warningCtx.lineTo(-size * 0.3, size * 0.4);
+            warningCtx.closePath();
+            warningCtx.fill();
+            warningCtx.stroke();
+
+            warningCtx.restore();
+
+            // 距離表示（近い場合のみ）
+            if (distance < 2) {
+                warningCtx.fillStyle = `rgba(255, 255, 255, ${intensity})`;
+                warningCtx.font = "bold 14px Arial";
+                warningCtx.textAlign = "center";
+                warningCtx.fillText(`${distance.toFixed(1)}m`, x, y + 35);
+            }
+        }
+    });
 }
 
 // 3D空間にタイトル画面を作成
@@ -357,22 +669,21 @@ function createEnemy() {
 
     // カメラ位置を基準に配置
     const cameraPos = camera.position.clone();
-    const cameraDir = new THREE.Vector3(0, 0, -1);
-    cameraDir.applyQuaternion(camera.quaternion);
 
-    // カメラの前方1〜3m、左右1m、高さは目線付近
-    const distance = 1.0 + Math.random() * 2.0; // 1〜3m先
-    const horizontalOffset = (Math.random() - 0.5) * 2.0; // 左右1m
-    const verticalOffset = -0.3 + Math.random() * 0.6; // 視線付近±30cm
+    // 360度ランダムな方向に配置（四方八方から出現）
+    const angle = Math.random() * Math.PI * 2; // 0〜360度
+    const distance = 2.0 + Math.random() * 2.0; // 2〜4m先
+    const verticalOffset = -0.5 + Math.random() * 1.0; // 視線付近±50cm
 
-    // カメラの向きに基づいて配置
-    const right = new THREE.Vector3(1, 0, 0);
-    right.applyQuaternion(camera.quaternion);
+    // 水平面上でランダムな方向に配置
+    const offsetX = Math.cos(angle) * distance;
+    const offsetZ = Math.sin(angle) * distance;
 
-    enemy.position.copy(cameraPos)
-        .add(cameraDir.multiplyScalar(distance))
-        .add(right.multiplyScalar(horizontalOffset))
-        .add(new THREE.Vector3(0, verticalOffset, 0));
+    enemy.position.set(
+        cameraPos.x + offsetX,
+        cameraPos.y + verticalOffset,
+        cameraPos.z + offsetZ,
+    );
 
     enemy.userData.isEnemy = true;
     enemy.userData.speed = 0.005 + Math.random() * 0.01;
@@ -598,6 +909,9 @@ function endGame() {
     gameState.enemies.forEach((enemy) => scene.remove(enemy));
     gameState.enemies = [];
 
+    // 3D警告インジケーターを非表示
+    warningIndicators.forEach((indicator) => indicator.visible = false);
+
     // 全ての弾丸を削除
     gameState.bullets.forEach((bullet) => {
         if (bullet.userData.body) {
@@ -628,6 +942,12 @@ function animate() {
 function render(timestamp, frame) {
     // 物理ワールドの更新
     world.step();
+
+    // 視界外警告の描画（2D）
+    drawOffScreenWarnings();
+
+    // AR空間での3D警告インジケーターの更新
+    update3DWarningIndicators();
 
     // ARヒットテストの処理
     if (frame && hitTestSource) {
