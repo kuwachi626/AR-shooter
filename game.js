@@ -61,6 +61,12 @@ let warningIndicators = [];
 let scoreUI3D, hpUI3D, timerUI3D;
 // 3Dゲームオーバー画面
 let gameOver3DGroup, restartButton3D;
+// 銃声SE
+let shotSound;
+// ダメージSE
+let damageSound;
+// ヒットSE
+let hitSound;
 
 // 初期化
 function init() {
@@ -173,6 +179,18 @@ function init() {
 
     // 3Dゲームオーバー画面を作成
     create3DGameOverScreen();
+
+    // 銃声SEを読み込む
+    shotSound = new Audio("SE/shot.mp3");
+    shotSound.volume = 0.3; // 音量を調整（0.0〜1.0）
+
+    // ダメージSEを読み込む
+    damageSound = new Audio("SE/damage.mp3");
+    damageSound.volume = 0.5; // 音量を調整（0.0〜1.0）
+
+    // ヒットSEを読み込む
+    hitSound = new Audio("SE/hit.mp3");
+    hitSound.volume = 0.4; // 音量を調整（0.0〜1.0）
 
     // ウィンドウリサイズ対応
     window.addEventListener("resize", onWindowResize);
@@ -1175,6 +1193,12 @@ function shootBullet(sourceController) {
         navigator.vibrate(30);
     }
 
+    // 銃声SEを再生
+    if (shotSound) {
+        shotSound.currentTime = 0; // 最初から再生
+        shotSound.play().catch((e) => console.log("音声再生エラー:", e));
+    }
+
     console.log(
         "弾丸発射成功:",
         bullet.position,
@@ -1264,6 +1288,12 @@ function shootBulletFromCamera() {
 
     scene.add(bullet);
     gameState.bullets.push(bullet);
+
+    // 銃声SEを再生
+    if (shotSound) {
+        shotSound.currentTime = 0; // 最初から再生
+        shotSound.play().catch((e) => console.log("音声再生エラー:", e));
+    }
 
     console.log("弾丸発射（カメラ）:", bullet.position);
 }
@@ -1497,6 +1527,14 @@ function render(timestamp, frame) {
                         b !== bullet
                     );
 
+                    // ヒットSEを再生
+                    if (hitSound) {
+                        hitSound.currentTime = 0;
+                        hitSound.play().catch((e) =>
+                            console.log("ヒット音再生エラー:", e)
+                        );
+                    }
+
                     // バイブレーション
                     if (navigator.vibrate) {
                         navigator.vibrate(50);
@@ -1527,6 +1565,14 @@ function render(timestamp, frame) {
                 gameState.enemies = gameState.enemies.filter((e) =>
                     e !== enemy
                 );
+
+                // ダメージSEを再生
+                if (damageSound) {
+                    damageSound.currentTime = 0;
+                    damageSound.play().catch((e) =>
+                        console.log("ダメージ音再生エラー:", e)
+                    );
+                }
 
                 if (gameState.hp <= 0) {
                     endGame();
