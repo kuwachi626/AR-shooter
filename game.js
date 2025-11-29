@@ -1271,7 +1271,8 @@ function createEnemy() {
     // 360度ランダムな方向に配置（四方八方から出現）
     const angle = Math.random() * Math.PI * 2; // 0〜360度
     const distance = 2.0 + Math.random() * 2.0; // 2〜4m先
-    const verticalOffset = -0.5 + Math.random() * 1.0; // 視線付近±50cm
+    // 高さをより広範囲に分散（地面近く〜頭上まで）
+    const verticalOffset = -1.0 + Math.random() * 2.0; // 視線から±1m（合計2mの範囲）
 
     // 水平面上でランダムな方向に配置
     const offsetX = Math.cos(angle) * distance;
