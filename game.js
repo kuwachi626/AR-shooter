@@ -1104,6 +1104,19 @@ async function startAR() {
         startScreen.style.display = "none";
 
         const titleScreen3D = create3DTitleScreen();
+
+        // カメラの現在位置から正面に配置
+        const cameraPos = camera.position.clone();
+        const cameraDir = new THREE.Vector3(0, 0, -1);
+        cameraDir.applyQuaternion(camera.quaternion);
+        const up = new THREE.Vector3(0, 1, 0);
+
+        const titlePos = cameraPos.clone()
+            .add(cameraDir.multiplyScalar(2))
+            .add(up.multiplyScalar(1.3)); // 視線より1.5m上に配置（目線の高さに）
+        titleScreen3D.position.copy(titlePos);
+        titleScreen3D.quaternion.copy(camera.quaternion);
+
         scene.add(titleScreen3D);
 
         console.log("3Dタイトル画面を表示");
